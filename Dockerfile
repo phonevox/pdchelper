@@ -7,5 +7,4 @@ RUN bun install
 
 COPY . .
 
-CMD ["bun", "src/deploy-commands.ts"]
 CMD ["bun", "src/index.ts"]

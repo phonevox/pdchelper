@@ -9,4 +9,4 @@ services:
       - .env
     volumes:
       - ./commands.json:/app/commands.json:ro
-    command: ["bun", "src/index.ts"]
+    command: ["sh", "-c", "bun src/deploy-commands.ts && bun src/index.ts"]
