@@ -40,6 +40,15 @@ for (const cmd of commandsJson) {
 }
 
 /*
+  Evita conflito com o comando help separado.
+*/
+if (commandsJson.some((cmd) => cmd.name === 'help')) {
+    throw new Error(
+        'commands.json inválido: o comando "help" é reservado e deve ser tratado separadamente'
+    )
+}
+
+/*
   Mapa para buscar o comando pelo nome rapidamente.
 */
 const commandsMap = new Map<string, CommandJson>()
@@ -56,92 +65,114 @@ client.once(Events.ClientReady, (readyClient) => {
     console.log(`Ready! Logged in as ${readyClient.user.tag}`)
 })
 
-client.on(
-    Events.InteractionCreate,
-    async (interaction: ChatInputCommandInteraction | any) => {
-        /*
-          Ignora tudo que não for slash command.
-        */
-        if (!interaction.isChatInputCommand()) return
+client.on(Events.InteractionCreate, async (interaction) => {
+    /*
+      Ignora tudo que não for slash command.
+    */
+    if (!interaction.isChatInputCommand()) return
 
-        console.log({
-            type: 'SLASH_COMMAND',
-            command: interaction.commandName,
-            user: interaction.user.tag,
-            userId: interaction.user.id,
-            guild: interaction.guild?.name,
-            guildId: interaction.guildId,
-            channelId: interaction.channelId,
-            timestamp: new Date().toISOString(),
+    await handleSlashCommand(interaction)
+})
+
+async function handleSlashCommand(
+    interaction: ChatInputCommandInteraction
+): Promise<void> {
+    console.log({
+        type: 'SLASH_COMMAND',
+        command: interaction.commandName,
+        user: interaction.user.tag,
+        userId: interaction.user.id,
+        guild: interaction.guild?.name,
+        guildId: interaction.guildId,
+        channelId: interaction.channelId,
+        timestamp: new Date().toISOString(),
+    })
+
+    /*
+      BLOQUEIO DE CANAL
+      Define os canais permitidos via .env
+      Ex: ALLOWED_CHANNELS=123,456
+    */
+    const allowedChannels = (process.env.ALLOWED_CHANNELS ?? '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+
+    /*
+      Se houver canais definidos e o atual não estiver na lista → bloqueia.
+    */
+    if (
+        allowedChannels.length > 0 &&
+        !allowedChannels.includes(interaction.channelId)
+    ) {
+        await interaction.reply({
+            content: 'Este comando só pode ser usado no canal configurado.',
+            flags: 64,
         })
+        return
+    }
 
+    try {
         /*
-          🔥 BLOQUEIO DE CANAL
-          Define os canais permitidos via .env
-          Ex: ALLOWED_CHANNELS=123,456
+          Comando /help separado:
+          monta a lista com base em todos os comandos do commands.json.
         */
-        const allowedChannels = (process.env.ALLOWED_CHANNELS ?? '')
-            .split(',')
-            .map(id => id.trim())
-            .filter(Boolean)
+        if (interaction.commandName === 'help') {
+            const helpMessage = commandsJson
+                .map((cmd) => `/${cmd.name} - ${cmd.description}`)
+                .join('\n')
 
-        /*
-          Se houver canais definidos e o atual não estiver na lista → bloqueia
-        */
-        if (
-            allowedChannels.length > 0 &&
-            !allowedChannels.includes(interaction.channelId)
-        ) {
             await interaction.reply({
-                content: 'Este comando só pode ser usado no canal configurado.',
-                flags: 64, // ephemeral
+                content:
+                    helpMessage.length > 0
+                        ? `Comandos disponíveis:\n\n${helpMessage}`
+                        : 'Nenhum comando disponível no momento.',
+                flags: 64,
             })
             return
         }
 
-        try {
-            /*
-              Procura o comando no JSON.
-            */
-            const command = commandsMap.get(interaction.commandName)
+        /*
+          Procura o comando dinâmico no JSON.
+        */
+        const command = commandsMap.get(interaction.commandName)
 
-            /*
-              Se não existir, responde para o Discord não ficar pendurado.
-            */
-            if (!command) {
-                await interaction.reply({
-                    content: 'Comando não encontrado.',
-                    flags: 64,
-                })
-                return
-            }
-
-            /*
-              Resposta dinâmica vinda do JSON.
-            */
+        /*
+          Se não existir, responde para o Discord não ficar pendurado.
+        */
+        if (!command) {
             await interaction.reply({
-                content: command.response,
+                content: 'Comando não encontrado.',
                 flags: 64,
             })
-        } catch (error) {
-            console.error('Erro ao processar interação:', error)
+            return
+        }
 
-            /*
-              Garante que o Discord sempre receba alguma resposta.
-            */
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({
-                    content: 'Ocorreu um erro ao executar o comando.',
-                    flags: 64,
-                })
-            } else {
-                await interaction.reply({
-                    content: 'Ocorreu um erro ao executar o comando.',
-                    flags: 64,
-                })
-            }
+        /*
+          Resposta dinâmica vinda do JSON.
+        */
+        await interaction.reply({
+            content: command.response,
+            flags: 64,
+        })
+    } catch (error) {
+        console.error('Erro ao processar interação:', error)
+
+        /*
+          Garante que o Discord sempre receba alguma resposta.
+        */
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({
+                content: 'Ocorreu um erro ao executar o comando.',
+                flags: 64,
+            })
+        } else {
+            await interaction.reply({
+                content: 'Ocorreu um erro ao executar o comando.',
+                flags: 64,
+            })
         }
     }
-)
+}
 
 client.login(DISCORD_TOKEN)

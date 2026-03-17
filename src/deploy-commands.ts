@@ -31,7 +31,7 @@ if (!GUILD_ID) {
 }
 
 /*
-  Lê e valida o JSON dos comandos.
+  Lê e valida o JSON dos comandos dinâmicos.
 */
 const rawJson = fs.readFileSync('./commands.json', 'utf-8')
 const commandsJson = JSON.parse(rawJson) as CommandJson[]
@@ -49,14 +49,41 @@ for (const cmd of commandsJson) {
 }
 
 /*
-  Converte para o formato aceito pelo Discord.
+  Evita conflito caso alguém tente criar help dentro do JSON.
 */
-const commands = commandsJson.map((cmd) =>
+if (commandsJson.some((cmd) => cmd.name === 'help')) {
+    throw new Error(
+        'commands.json inválido: o comando "help" é reservado e deve ser tratado separadamente'
+    )
+}
+
+/*
+  Converte os comandos do JSON para o formato aceito pelo Discord.
+*/
+const dynamicCommands = commandsJson.map((cmd) =>
     new SlashCommandBuilder()
         .setName(cmd.name)
         .setDescription(cmd.description)
         .toJSON()
 )
+
+/*
+  Comando separado de help.
+*/
+const helpCommand = new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Lista todos os comandos disponíveis')
+    .toJSON()
+
+/*
+  Junta tudo:
+  - comandos dinâmicos do JSON
+  - comando fixo /help
+*/
+const commands = [
+    ...dynamicCommands,
+    helpCommand,
+]
 
 const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN)
 
@@ -64,12 +91,13 @@ async function deployCommands(): Promise<void> {
     try {
         console.log('Registrando comandos...')
 
-        await rest.put(
+        const result = await rest.put(
             Routes.applicationGuildCommands(CLIENT_ID!, GUILD_ID!),
             { body: commands }
         )
 
         console.log('Comandos registrados com sucesso.')
+        console.log(result)
     } catch (error) {
         console.error('Erro ao registrar comandos:', error)
     }
