@@ -6,11 +6,12 @@
 ![Discord.js](https://img.shields.io/badge/discord.js-v14-blueviolet)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
+Para criar seu bot no Discord acesse: https://discordjs.guide/legacy/preparations/app-setup
+
 Bot de Discord baseado em **slash commands dinâmicos via JSON**, com suporte a:
 
 - respostas automáticas
 - controle de canais permitidos
-- autocomplete (opcional)
 - fácil manutenção sem mexer no código
 
 ---
@@ -74,9 +75,7 @@ O bot:
 3. responde automaticamente baseado no response
 
 ## ▶️ Executar
-1. Registrar comandos: `bun run deploy`
-
-2. Iniciar bot: `npm run dev`
+Rodar: `docker compose up -d`
 
 ## 🔒 Restrição por canal
 
